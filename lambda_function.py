@@ -1,8 +1,8 @@
 import json
 import urllib.request
+import os
 
-def notify_discord(push_from, push_subject, push_body):
-    url = "https://discord.com/api/webhooks/lol"
+def notify_discord(url, push_from, push_subject, push_body):
     #for all params, see https://discordapp.com/developers/docs/resources/webhook#execute-webhook
     data = {
         "username" : push_from
@@ -24,13 +24,13 @@ def notify_discord(push_from, push_subject, push_body):
 
 def lambda_handler(event, context):
     if not "Records" in event:
-        notify_discord("AWS Lambda", "weird event", json.dumps(event))
+        notify_discord(os.environ.get("test_target"), "AWS Lambda", "weird event", json.dumps(event))
     for record in event["Records"]:
         if "eventSource" not in record:
             if "EventSource" in record:
                 record["eventSource"] = record["EventSource"] #what the fuck?
             else:
-                notify_discord("AWS Lambda", "No eventSource", json.dumps(record))
+                notify_discord(os.environ.get("test_target"), "AWS Lambda", "No eventSource", json.dumps(record))
                 continue
         
         #we forsure have an eventSource
@@ -38,7 +38,13 @@ def lambda_handler(event, context):
             m_subject = record["ses"]["mail"]["commonHeaders"]["subject"]
             m_from = record["ses"]["mail"]["commonHeaders"]["from"][0] #why tf is this an array
             for destination in record["ses"]["mail"]["destination"]:
-                notify_discord(m_from, m_subject, "")
+                service = destination.split('@')[0].lower()
+                print("Found service", service)
+                url = os.environ.get(service + "_target")
+                if url is None:
+                    notify_discord(os.environ.get("test_target"), "AWS Lambda", "Target url not defined for service", service)
+                else:
+                    notify_discord(url, m_from, m_subject, "")
         elif record["eventSource"] == "aws:sns":
             sns_contents = json.loads(record["Sns"]["Message"])
             m_subject = sns_contents["mail"]["commonHeaders"]["subject"]
@@ -46,9 +52,15 @@ def lambda_handler(event, context):
             m_body = sns_contents["content"].split('\n\n')[1]
             
             for destination in sns_contents["mail"]["destination"]:
-                notify_discord(m_from, m_subject, m_body)
+                service = destination.split('@')[0].lower()
+                print("Found service", service)
+                url = os.environ.get(service + "_target")
+                if url is None:
+                    notify_discord(os.environ.get("test_target"), "AWS Lambda", "Target url not defined for service", service)
+                else:
+                    notify_discord(url, m_from, m_subject, m_body)
         else:
-            notify_discord("AWS Lambda", "Unknown eventSource", record["eventSource"])
+            notify_discord(os.environ.get("test_target"), "AWS Lambda", "Unknown eventSource", record["eventSource"])
             continue
         
     return {
