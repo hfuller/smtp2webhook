@@ -73,18 +73,22 @@ def lambda_handler(event, context):
             
             for destination in record["ses"]["mail"]["destination"]:
                 service = destination.split('@')[0].lower()
-                print("Found service", service)
+                print("ses Found service", service)
                 #REAL NOTIFICATION
                 notify(service, m_from, m_subject, "")
         elif record["eventSource"] == "aws:sns":
             sns_contents = json.loads(record["Sns"]["Message"])
             m_subject = sns_contents["mail"]["commonHeaders"]["subject"]
             m_from = sns_contents["mail"]["commonHeaders"]["from"][0] #why tf is this an array
-            m_body = sns_contents["content"].split('\n\n')[1]
+            try:
+                m_body_list = sns_contents["content"].replace('\r\n','\n').split('\n\n')[1:]
+                m_body = '\n\n'.join(m_body_list)
+            except IndexError:
+                m_body = sns_contents["content"]
 
             for destination in sns_contents["mail"]["destination"]:
                 service = destination.split('@')[0].lower()
-                print("Found service", service)
+                print("sns Found service", service)
                 #REAL NOTIFICATION
                 notify(service, m_from, m_subject, m_body)
         else:
