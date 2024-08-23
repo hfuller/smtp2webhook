@@ -6,14 +6,26 @@ def notify(service, push_from, push_subject, push_body):
     schema = os.environ.get(service + "_schema")
     target = os.environ.get(service + "_target")
     if target is None:
-        notify_discord(os.environ.get("test_target"), "AWS Lambda", "Target url not defined for service", service)
+        notify_discord(os.environ.get("test_target"), "AWS Lambda", "Target not defined for service", service)
     else:
         if schema == "discord":
             notify_discord(target, push_from, push_subject, push_body)
         elif schema == "pushover":
             notify_pushover(target, push_from, push_subject, push_body)
+        elif schema == "fanout":
+            notify_fanout(target, push_from, push_subject, push_body)
         else:
             notify_discord(os.environ.get("test_target"), "AWS Lambda", "Schema not defined for service", service)
+            
+def notify_fanout(target, push_from, push_subject, push_body):
+    #For fanout service, target is defined as a JSON array of service names.
+    #SO, we load that array, then hit each service in turn.
+    services = json.loads(target)
+    for service in services:
+        try:
+            notify(service, push_from, push_subject, push_body)
+        except:
+            notify_discord(os.environ.get("test_target"), "AWS Lambda", "Fanout Notify failed", service)
 
 def notify_pushover(user, push_from, push_subject, push_body):
     new_subject = push_from + " - " + push_subject
